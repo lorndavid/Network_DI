@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useContext, useMemo, useRef } from "react";
 import {
   Search,
@@ -43,6 +44,9 @@ import {
   ArrowUpCircle,
   List,
   Smartphone,
+  LogOut,
+  Settings,
+  User
 } from "lucide-react";
 import { db } from "./services/firebase";
 import { Cabin, Zones, PC, Stats, Device, DeviceType, Table } from "./types";
@@ -56,14 +60,14 @@ styles.innerHTML = `
     --bg-light: #f8fafc;
     --bg-dark: #020617; 
     --glass-light: rgba(255, 255, 255, 0.85);
-    --glass-dark: rgba(30, 41, 59, 0.4);
+    --glass-dark: rgba(15, 23, 42, 0.6);
     --border-light: 1px solid rgba(226, 232, 240, 0.8);
     --border-dark: 1px solid rgba(255, 255, 255, 0.08);
   }
   
   .glass-panel {
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
@@ -78,6 +82,12 @@ styles.innerHTML = `
 
   .hover-3d { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
   .hover-3d:hover { transform: translateY(-3px) scale(1.01); }
+
+  /* Custom Scrollbar for Sidebar */
+  .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+  .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+  .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.2); border-radius: 4px; }
+  .sidebar-scroll:hover::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.5); }
 
   /* Print Styles */
   @media print {
@@ -307,6 +317,11 @@ const CabinCard = ({
     );
   }, [cabin.tables]);
 
+  // Find primary switch (Manage Switch or Router)
+  const primarySwitch = cabin.devices?.find(
+    (d: Device) => d.type === DeviceType.MANAGE || d.type === DeviceType.ROUTER
+  );
+
   return (
     <div
       className={`glass-panel rounded-2xl mb-4 md:mb-6 overflow-hidden transition-all duration-500 group border border-slate-100 dark:border-white/5 ${
@@ -315,12 +330,13 @@ const CabinCard = ({
           : "hover:shadow-xl"
       }`}
     >
-      {/* Header */}
+      {/* Header - REFACTORED FOR SAME ROW ALIGNMENT */}
       <div
-        className="p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between cursor-pointer bg-white/40 dark:bg-slate-800/30 hover:bg-white/60 dark:hover:bg-slate-800/50 transition-colors gap-4 md:gap-0"
+        className="p-4 md:p-5 flex items-center justify-between cursor-pointer bg-white/40 dark:bg-slate-800/30 hover:bg-white/60 dark:hover:bg-slate-800/50 transition-colors"
         onClick={toggle}
       >
-        <div className="flex items-center gap-3 md:gap-5">
+        {/* Left Side: Icon, Name, Progress */}
+        <div className="flex items-center gap-3 md:gap-5 flex-1 min-w-0">
           <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 shrink-0">
             <Server size={24} />
           </div>
@@ -377,18 +393,24 @@ const CabinCard = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-between md:justify-end gap-4">
-          <div className="flex gap-1 flex-wrap justify-end max-w-[200px] md:max-w-[150px]">
-            {cabin.devices &&
-              cabin.devices.map((d: Device) => (
-                <span
-                  key={d.id}
-                  className="text-[9px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-slate-500 border border-slate-200 dark:border-slate-700 truncate max-w-[100px] md:max-w-[80px]"
-                >
-                  {d.name}
-                </span>
-              ))}
-          </div>
+        {/* Right Side: Switch Name + Chevron (SAME ROW) */}
+        <div className="flex items-center gap-3 pl-2">
+          {primarySwitch && (
+            <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50/80 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-500/20 backdrop-blur-sm shadow-sm transition-all hover:bg-indigo-100/80 dark:hover:bg-indigo-900/40">
+              <Network size={12} className="text-indigo-500" />
+              <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-300 uppercase tracking-wide whitespace-nowrap">
+                {primarySwitch.name}
+              </span>
+            </div>
+          )}
+          
+          {/* Mobile Switch Icon Only */}
+          {primarySwitch && (
+             <div className="md:hidden flex items-center justify-center w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500">
+                <Network size={14} />
+             </div>
+          )}
+
           <button
             className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform duration-300 ${
               isExpanded ? "rotate-180 bg-slate-200 dark:bg-slate-700" : ""
@@ -403,7 +425,7 @@ const CabinCard = ({
         <div className="border-t border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-black/20 p-3 md:p-6 animate-enter">
           <div className="grid gap-4 md:gap-6">
             {sortedTables.map(([tid, table]: any) => {
-              // --- SORTING LOGIC MODIFIED HERE ---
+              // --- SORTING LOGIC: Zone A (L->R), Zone B (R->L) ---
               const pcs = Object.entries(table.pcs || {}).sort(
                 (a: any, b: any) => {
                   const numA = parseInt(a[0].replace(/\D/g, "")) || 0;
@@ -2013,102 +2035,142 @@ const AppContent = () => {
     ));
   };
 
+  // --- MODERN SIDEBAR COMPONENT ---
+  const SidebarItem = ({ id, label, icon: Icon, onClick, active, hidden }: any) => {
+    if(hidden) return null;
+    return (
+        <button
+            onClick={() => onClick(id)}
+            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 group relative overflow-hidden ${
+                active 
+                ? "bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-lg shadow-indigo-500/25 ring-1 ring-white/20" 
+                : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white"
+            }`}
+        >
+            <div className={`relative z-10 flex items-center gap-3`}>
+                <Icon size={18} className={active ? "text-white" : "text-slate-400 group-hover:text-indigo-500 transition-colors"} />
+                <span className={`font-bold text-sm tracking-wide font-khmer`}>{label}</span>
+            </div>
+            {active && (
+                <div className="absolute right-0 top-0 h-full w-1 bg-white/20"></div>
+            )}
+        </button>
+    );
+  };
+
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-[#020617] transition-colors duration-300">
-      {/* SIDEBAR */}
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-[#020617] transition-colors duration-300 font-sans">
+      {/* SIDEBAR - MODERN DESIGN */}
       <aside
-        className={`fixed md:relative z-50 h-full w-72 glass-panel border-r-0 md:border-r border-white/20 flex flex-col transition-transform duration-300 ${
+        className={`fixed md:relative z-50 h-full w-72 glass-panel border-r border-slate-200/50 dark:border-white/5 flex flex-col transition-transform duration-300 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
-        <div className="h-28 md:h-32 flex flex-col justify-center px-5 md:px-5 gap-2 border-b border-slate-100 dark:border-slate-800/50">
-          <div className="flex items-center">{/* Modern Close Button */}</div>
-
-          <div>
-            <h1 className="font-black text-xl md:text-xl tracking-wide text-slate-800 dark:text-white font-moul leading-tight whitespace-nowrap">
-              ប្រព័ន្ធគ្រប់គ្រងអ៊ីនធឺណិត
-            </h1>
+        {/* Sidebar Header */}
+        <div className="h-28 flex flex-col justify-center px-6 border-b border-slate-200/50 dark:border-white/5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl  from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
+                <img
+                  src="https://i.postimg.cc/FHBn0Fdf/di3-copy.png"
+                  alt="NetControl Logo"
+                  className="w-10 h-10"
+                />
+              </div>
+              <div>
+                <h1 className="font-black text-lg tracking-tight text-slate-900 dark:text-white leading-tight">
+                  Network Control
+                </h1>
+                
+              </div>
+            </div>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="md:hidden text-slate-400 hover:text-slate-600"
+            >
+              <X size={24} />
+            </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 custom-scrollbar">
-          <button
-            onClick={() => handleNav("all")}
-            className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all font-bold text-sm ${
-              view === "all"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
-                : "text-slate-500 hover:bg-white dark:hover:bg-white/5"
-            } font-khmer`}
-          >
-            <PieChart size={18} /> ប្រព័ន្ធគ្រប់គ្រងទូទៅ
-          </button>
-          <button
-            onClick={() => handleNav("infoNetwork")}
-            className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all font-bold text-sm ${
-              view === "infoNetwork"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
-                : "text-slate-500 hover:bg-white dark:hover:bg-white/5"
-            } font-khmer`}
-          >
-            <Info size={18} /> InfoNetwork
-          </button>
-          {/* REPORT TAB (Hidden on Mobile) */}
-          <button
-            onClick={() => handleNav("report")}
-            className={`hidden md:flex w-full items-center gap-4 px-4 py-3.5 rounded-xl transition-all font-bold text-sm ${
-              view === "report"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
-                : "text-slate-500 hover:bg-white dark:hover:bg-white/5"
-            } font-khmer`}
-          >
-            <FileText size={18} /> Report
-          </button>
+        {/* Sidebar Menu */}
+        <div className="flex-1 overflow-y-auto py-6 px-4 space-y-8 custom-scrollbar sidebar-scroll">
+          {/* Group 1 */}
+          <div className="space-y-1">
+            <h3 className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+              Management
+            </h3>
+            <SidebarItem
+              id="all"
+              label="Overview"
+              icon={PieChart}
+              active={view === "all"}
+              onClick={handleNav}
+            />
+            <SidebarItem
+              id="infoNetwork"
+              label="Network Info"
+              icon={Info}
+              active={view === "infoNetwork"}
+              onClick={handleNav}
+            />
+            <SidebarItem
+              id="report"
+              label="Reports"
+              icon={FileText}
+              active={view === "report"}
+              onClick={handleNav}
+              hidden={
+                window.innerWidth < 768 &&
+                true /* logical hidden handled by styling in css, here handled by prop */
+              }
+            />
+          </div>
 
-          <button
-            onClick={() => handleNav("RB")}
-            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all font-bold text-sm ${
-              view === "RB"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
-                : "text-slate-500 hover:bg-white dark:hover:bg-white/5"
-            } font-khmer`}
-          >
-            <div className="flex items-center gap-4">
-              <Server size={18} /> ជួរតុតំបន់ B
-            </div>
-            <span className="px-2 py-0.5 rounded bg-white/20 text-[10px]">
-              {Object.keys(zones.RB || {}).length}
-            </span>
-          </button>
-          <button
-            onClick={() => handleNav("RA")}
-            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all font-bold text-sm ${
-              view === "RA"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
-                : "text-slate-500 hover:bg-white dark:hover:bg-white/5"
-            } font-khmer`}
-          >
-            <div className="flex items-center gap-4">
-              <Layers size={18} /> ជួរតុតំបន់ A 
-            </div>
-            <span className="px-2 py-0.5 rounded bg-white/20 text-[10px]">
-              {Object.keys(zones.RA || {}).length}
-            </span>
-          </button>
+          {/* Group 2 */}
+          <div className="space-y-1">
+            <h3 className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+              Zones
+            </h3>
+            <SidebarItem
+              id="RB"
+              label="Zone B (Left)"
+              icon={Server}
+              active={view === "RB"}
+              onClick={handleNav}
+            />
+            <SidebarItem
+              id="RA"
+              label="Zone A (Right)"
+              icon={Layers}
+              active={view === "RA"}
+              onClick={handleNav}
+            />
+          </div>
         </div>
 
-        <div className="p-6 border-t border-slate-200 dark:border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold text-sm shadow-lg border-2 border-white dark:border-slate-800">
-              IT
-            </div>
-            <div>
-              <p className="text-s font-bold text-slate-800 dark:text-white font-khmer">
-                 IT_SupportV1
-              </p>
+        {/* Sidebar Footer (User Profile) */}
+        <div className="p-4 border-t border-slate-200/50 dark:border-white/5 bg-slate-50/50 dark:bg-white/0 backdrop-blur-sm">
+          <div className="glass-panel p-3 rounded-2xl border border-slate-200 dark:border-white/10 flex items-center justify-between group hover:border-indigo-500/30 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 p-0.5">
+                <div className="w-full h-full rounded-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+                  <User size={18} className="text-emerald-500" />
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-black text-slate-800 dark:text-white">
+                  IT Support
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <p className="text-[10px] font-bold text-slate-400">Online</p>
+                </div>
+              </div>
             </div>
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="ml-auto w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-indigo-500 transition-colors"
+              className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-indigo-500 transition-colors"
             >
               {theme === "dark" ? <Moon size={16} /> : <Sun size={16} />}
             </button>
@@ -2121,17 +2183,17 @@ const AppContent = () => {
         ref={mainRef}
         className="flex-1 flex flex-col relative h-full overflow-hidden overflow-y-auto scroll-smooth"
       >
-        <header className="flex flex-col border-b border-slate-200 dark:border-white/5 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md sticky top-0 z-40">
+        <header className="flex flex-col border-b border-slate-200 dark:border-white/5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl sticky top-0 z-40 transition-all duration-300">
           <div className="h-16 md:h-20 flex items-center justify-between px-4 md:px-8">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="md:hidden text-slate-500 dark:text-slate-300"
+                className="md:hidden text-slate-500 dark:text-slate-300 p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
               >
                 <Menu size={24} />
               </button>
               <div>
-                <h2 className="text-lg md:text-xl font-black text-slate-800 dark:text-white tracking-tight font-moul">
+                <h2 className="text-lg md:text-2xl font-black text-slate-800 dark:text-white tracking-tight font-moul">
                   {view === "all"
                     ? "ប្រព័ន្ធគ្រប់គ្រងទូទៅ"
                     : view === "infoNetwork"
@@ -2143,41 +2205,38 @@ const AppContent = () => {
               </div>
             </div>
             {view !== "report" && view !== "infoNetwork" && (
-              <div className="hidden md:flex items-center gap-4">
+              <div className="hidden md:flex items-center gap-3">
                 <form
                   onSubmit={handleGlobalSearch}
-                  className="relative group flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl pr-1 focus-within:ring-2 focus-within:ring-indigo-500/50 transition-all"
+                  className="relative group flex items-center bg-slate-100 dark:bg-slate-800/80 rounded-2xl pr-1 focus-within:ring-2 focus-within:ring-indigo-500/50 transition-all border border-transparent focus-within:border-indigo-500/20"
                 >
-                  <Search className="ml-3 text-slate-400" size={16} />
+                  <Search
+                    className="ml-3 text-slate-400 group-focus-within:text-indigo-500 transition-colors"
+                    size={18}
+                  />
                   <input
-                    className="pl-3 pr-4 py-2.5 bg-transparent border-none outline-none font-bold text-xs text-slate-600 dark:text-slate-300 w-64 font-khmer"
+                    className="pl-3 pr-4 py-2.5 bg-transparent border-none outline-none font-bold text-xs text-slate-600 dark:text-slate-300 w-64 font-khmer placeholder-slate-400"
                     placeholder="ស្វែងរក (Ex: Row2Apc1)"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
                   <button
-                    type="submit"
-                    className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-xs font-bold mr-1 transition-colors font-khmer shadow-sm"
-                  >
-                    ស្វែងរក
-                  </button>
-                  <button
                     type="button"
                     onClick={() => setShowFilters(!showFilters)}
-                    className={`p-1.5 rounded-lg transition-colors ml-1 ${
+                    className={`p-2 rounded-xl transition-all duration-200 ml-1 ${
                       showFilters
-                        ? "bg-indigo-100 text-indigo-600"
-                        : "hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500"
+                        ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/25"
+                        : "hover:bg-white dark:hover:bg-white/10 text-slate-500"
                     }`}
                   >
-                    <Filter size={14} />
+                    <Filter size={16} />
                   </button>
                 </form>
                 <button
                   onClick={() => setModal("addCabin")}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-500/30 text-xs font-bold transition-transform hover:-translate-y-0.5 active:scale-95 flex items-center gap-2 font-khmer"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-2xl shadow-lg shadow-indigo-500/30 text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-2 font-khmer"
                 >
-                  <Plus size={14} /> បង្កើតទូថ្មី
+                  <Plus size={16} /> បង្កើតទូថ្មី
                 </button>
               </div>
             )}
@@ -2187,13 +2246,13 @@ const AppContent = () => {
               <div className="flex md:hidden gap-2">
                 <button
                   onClick={() => setShowMobileSearch(!showMobileSearch)}
-                  className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center"
+                  className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center active:scale-95 transition-transform"
                 >
                   <Search size={20} />
                 </button>
                 <button
                   onClick={() => setModal("addCabin")}
-                  className="bg-indigo-600 text-white w-10 h-10 rounded-lg flex items-center justify-center shadow-md active:scale-95 transition-transform"
+                  className="bg-indigo-600 text-white w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30 active:scale-95 transition-transform"
                 >
                   <Plus size={20} />
                 </button>
@@ -2204,13 +2263,11 @@ const AppContent = () => {
           {/* Filter Bar */}
           {view !== "report" && view !== "infoNetwork" && (
             <div
-              className={`overflow-hidden transition-all duration-300 ${
-                showFilters
-                  ? "max-h-24 border-t border-slate-100 dark:border-slate-800"
-                  : "max-h-0"
+              className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                showFilters ? "max-h-24 opacity-100" : "max-h-0 opacity-0"
               }`}
             >
-              <div className="px-4 md:px-8 py-3 flex flex-wrap items-center gap-4 bg-slate-50/50 dark:bg-black/20">
+              <div className="px-4 md:px-8 py-3 flex flex-wrap items-center gap-4 bg-slate-50/50 dark:bg-black/20 border-t border-slate-200/50 dark:border-white/5 backdrop-blur-sm">
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-khmer">
                     ស្ថានភាព:
@@ -2350,18 +2407,18 @@ const AppContent = () => {
                 <div className="grid xl:grid-cols-2 gap-8 animate-enter">
                   <div>
                     <div className="flex items-center gap-3 mb-5">
-                      <span className="w-3 h-3 rounded bg-indigo-500"></span>
+                      <span className="w-3 h-3 rounded bg-indigo-500 shadow-lg shadow-indigo-500/50"></span>
                       <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest font-khmer">
-                        តុតំបន់ B 
+                        តុតំបន់ B
                       </h3>
                     </div>
                     {renderList("RB")}
                   </div>
                   <div>
                     <div className="flex items-center gap-3 mb-5">
-                      <span className="w-3 h-3 rounded bg-purple-500"></span>
+                      <span className="w-3 h-3 rounded bg-purple-500 shadow-lg shadow-purple-500/50"></span>
                       <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest font-khmer">
-                        តុតំបន់ A 
+                        តុតំបន់ A
                       </h3>
                     </div>
                     {renderList("RA")}
